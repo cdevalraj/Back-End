@@ -1,0 +1,18 @@
+version: '3'
+services:
+  redis:
+    image: redis
+    container_name: redis-server
+    restart: on-failure
+    expose:
+      - 6379
+  node-app:
+    depends_on:
+      - redis
+    container_name: node-app
+    restart: on-failure
+    environment:
+      - REDIS_URL='redis://redis:6379'
+    build: .
+    ports:
+      - "3001:3001"

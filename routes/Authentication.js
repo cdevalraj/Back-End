@@ -64,16 +64,16 @@ router.post('/login', async (req, res) => {
                 username: user.username,
                 email: user.email,
                 role: user.role
-            }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '10s' })
+            }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' })
             const refreshToken = jwt.sign({
                 username: user.username,
                 email: user.email,
                 role: user.role
-            }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '5m' })
+            }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '5d' })
             //Store it into database
             client.lPush('RefreshToken', refreshToken)
             // res.cookie('jwt', refreshToken, { httpOnly: true, sameSite: 'None', secure: true, maxAge: 24 * 60 * 60 * 1000 });
-            return res.cookie('RefreshToken', refreshToken, { httpOnly: true, secure: true, sameSite: "none", maxAge: 5 * 60 * 1000 }).send({ accessToken: accessToken, role: user.role, username: user.username })
+            return res.cookie('RefreshToken', refreshToken, { httpOnly: true, secure: true, sameSite: "none", maxAge: 5 * 60 * 1000 }).send({ accessToken: accessToken })
         }
         else
             return res.status(401).send("Username or Email/Password Invalid")
@@ -89,7 +89,7 @@ router.post('/token', async (req, res) => {
     const refreshToken = cookies.RefreshToken
     if (refreshToken == null)
         return res.sendStatus(401)
-    const x = await client.lRange('RefreshToken', 0, -1)
+    let x = await client.lRange('RefreshToken', 0, -1)
     if (!x.includes(refreshToken))//check for the refresh Token
         return res.sendStatus(403)
     jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
@@ -99,7 +99,7 @@ router.post('/token', async (req, res) => {
             username: user.username,
             email: user.email,
             role: user.role
-        }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '10s' })
+        }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' })
         return res.json({ accessToken: accessToken })
     })
 })
@@ -107,9 +107,19 @@ router.post('/token', async (req, res) => {
 //Logout 
 router.delete('/logout', (req, res) => {
     //delete refreshtoken from datbase
-    client.LREM('RefreshToken', 1, req.cookies.RefreshToken).catch(er => console.log(er.message))
+    client.LREM('RefreshToken', 1, req.cookies.RefreshToken).catch(er => { Filtering(); console.log(er.message) })
     res.clearCookie('RefreshToken', { httpOnly: true, sameSite: 'None', secure: true }).status(204).send('Logged Out Successfully');
 })
 
+async function Filtering() {
+    let isTokenExpired = (token) => !(Date.now() >= JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp * 1000)
+    let x = await client.lRange('RefreshToken', 0, -1)
+    let len = x.length
+    x = x.filter(isTokenExpired)
+    if (len != x.length) {
+        await client.DEL('RefreshToken')
+        await client.lPush('RefreshToken', x)
+    }
+}
 
 module.exports = router

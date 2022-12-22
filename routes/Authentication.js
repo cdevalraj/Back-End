@@ -3,22 +3,10 @@ const router = express.Router()
 const bcrypt = require("bcrypt")
 const User = require('../models/User')
 const jwt = require('jsonwebtoken')
-const { createClient } = require('redis')
+const client = require('../api/Redis')
 
-// const redisClient=Redis.createClient()//({url:""}) for production ready or custom url
-const DEFAULT_EXPIRATION = process.env.DEFAULT_EXPIRATION || 25920000
-
-// redisClient.on('err',(err)=>console.log(err))
-// redisClient.once('open',()=>console.log("Connected "))
-
-const client = createClient({ url: process.env.REDIS_URL || '' });
-
-(async () => {
-    await client.connect()
-        .then(() => console.log("Connected to Rdis"))
-        .catch(err => { console.log('Redis Client Error', err.message) });
-})()
-// await client.disconnect();
+//To check whether the token has expired
+const isTokenExpired = (token) => !(Date.now() >= JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp * 1000)
 
 //SignUp a New User
 router.post('/signup', CheckUser, async (req, res) => {
@@ -73,7 +61,7 @@ router.post('/login', async (req, res) => {
             //Store it into database
             client.lPush('RefreshToken', refreshToken)
             // res.cookie('jwt', refreshToken, { httpOnly: true, sameSite: 'None', secure: true, maxAge: 24 * 60 * 60 * 1000 });
-            return res.cookie('RefreshToken', refreshToken, { httpOnly: true, secure: true, sameSite: "none", maxAge: 5 * 60 * 1000 }).send({ accessToken: accessToken })
+            return res.cookie('RefreshToken', refreshToken, { httpOnly: true, secure: true, sameSite: "none", maxAge: 5 * 24 * 60 * 60 * 1000 }).send({ accessToken: accessToken })
         }
         else
             return res.status(401).send("Username or Email/Password Invalid")
@@ -107,19 +95,26 @@ router.post('/token', async (req, res) => {
 //Logout 
 router.delete('/logout', (req, res) => {
     //delete refreshtoken from datbase
-    client.LREM('RefreshToken', 1, req.cookies.RefreshToken).catch(er => { Filtering(); console.log(er.message) })
+    client.LREM('RefreshToken', 1, req.cookies.RefreshToken).catch(er => { console.log(er.message) })
     res.clearCookie('RefreshToken', { httpOnly: true, sameSite: 'None', secure: true }).status(204).send('Logged Out Successfully');
 })
 
-async function Filtering() {
-    let isTokenExpired = (token) => !(Date.now() >= JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp * 1000)
-    let x = await client.lRange('RefreshToken', 0, -1)
-    let len = x.length
-    x = x.filter(isTokenExpired)
-    if (len != x.length) {
-        await client.DEL('RefreshToken')
-        await client.lPush('RefreshToken', x)
-    }
-}
+
+//Middleware for flitering the redis database interms of RefreshTokens by removing old tokens
+// async function Filtering(req, res, next) {
+//     try {
+//         let x = await client.lRange('RefreshToken', 0, -1)
+//         let len = x.length
+//         x = x.filter(isTokenExpired)
+//         if (x.length > 0 && len != x.length) {
+//             await client.del('RefreshToken').catch((er) => console.log(er.message))
+//             client.lPush('RefreshToken', x).catch((er) => console.log(er.message))
+//         }
+//     }
+//     catch (er) {
+//         console.log(er.message)
+//     }
+//     next()
+// }
 
 module.exports = router

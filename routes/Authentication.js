@@ -5,9 +5,6 @@ const User = require('../models/User')
 const jwt = require('jsonwebtoken')
 const client = require('../api/Redis')
 
-//To check whether the token has expired
-const isTokenExpired = (token) => !(Date.now() >= JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp * 1000)
-
 //SignUp a New User
 router.post('/signup', CheckUser, async (req, res) => {
     let hashedPwd = await bcrypt.hash(req.body.pwd, 10)
@@ -98,23 +95,5 @@ router.delete('/logout', (req, res) => {
     client.LREM('RefreshToken', 1, req.cookies.RefreshToken).catch(er => { console.log(er.message) })
     res.clearCookie('RefreshToken', { httpOnly: true, sameSite: 'None', secure: true }).status(204).send('Logged Out Successfully');
 })
-
-
-//Middleware for flitering the redis database interms of RefreshTokens by removing old tokens
-// async function Filtering(req, res, next) {
-//     try {
-//         let x = await client.lRange('RefreshToken', 0, -1)
-//         let len = x.length
-//         x = x.filter(isTokenExpired)
-//         if (x.length > 0 && len != x.length) {
-//             await client.del('RefreshToken').catch((er) => console.log(er.message))
-//             client.lPush('RefreshToken', x).catch((er) => console.log(er.message))
-//         }
-//     }
-//     catch (er) {
-//         console.log(er.message)
-//     }
-//     next()
-// }
 
 module.exports = router

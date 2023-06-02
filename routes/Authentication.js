@@ -17,11 +17,13 @@ router.post('/signup', CheckUser, async (req, res) => {
         password: hashedPwd,
         username: uname
     })
+    console.log(user)
     try {
         await user.save();
         res.status(201).send('User has been Registered Successfully');
     }
     catch (er) {
+        console.log("Hi")
         res.status(400).json({ message: er.message })
     }
 })

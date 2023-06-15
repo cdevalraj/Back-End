@@ -1,4 +1,5 @@
 const { createClient } = require('redis')
+const schedule = require('./SimpleSchedular');
 
 const client = createClient({ url: process.env.REDIS_URL || '' });
 var flag = false, eflag = true
@@ -9,16 +10,6 @@ client.connect()
 
 //To check whether the token has expired
 const isTokenExpired = (token) => !(Date.now() >= JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp * 1000)
-
-// A simple cron like shedular To schedule the filtering the redis database
-function schedule(task, interval) {
-    const now = new Date();
-    const delay = interval - now % interval;
-    setTimeout(function () {
-        task();
-        setInterval(task, interval);
-    }, delay);
-}
 
 client.on('connect', () => {
     if (!flag) {
@@ -46,7 +37,7 @@ async function Filtering() {
             await client.del('RefreshToken').catch((er) => console.log(er.message))
             client.lPush('RefreshToken', x).catch((er) => console.log(er.message))
         }
-        else if(x.length==0)
+        else if (x.length == 0)
             await client.del('RefreshToken').catch((er) => console.log(er.message))
         console.log('Running my task at', new Date());
     }
@@ -54,7 +45,7 @@ async function Filtering() {
         console.log(er.message)
     }
 }
+schedule(Filtering, 60 * 60 * 1000)
 
-schedule(Filtering,60*60*1000)
 // await client.disconnect();
 module.exports = client

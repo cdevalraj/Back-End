@@ -94,7 +94,7 @@ router.post('/token', async (req, res) => {
 //Logout 
 router.delete('/logout', (req, res) => {
     //delete refreshtoken from datbase
-    client.LREM('RefreshToken', 1, req.cookies.RefreshToken).catch(er => { console.log(er.message) })
+    client.LREM('RefreshToken', 1, req.cookies.RefreshToken).catch(er => {})
     res.clearCookie('RefreshToken', { httpOnly: true, sameSite: 'None', secure: true }).status(204).send('Logged Out Successfully');
 })
 

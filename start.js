@@ -6,6 +6,7 @@ const Room = require('./routes/Room')
 const cookieParser = require('cookie-parser');
 const cors = require('cors')
 const jwt = require('jsonwebtoken')
+const client = require("./api/Redis")
 const { app, httpServer, io } = require('./api/socketio');
 //Database Connection URL
 const url = process.env.URL;
@@ -22,6 +23,7 @@ app.use(cookieParser());
 mongoose.set('strictQuery', true);
 mongoose.connect(url, { useNewUrlParser: true }).then(() => console.log("Connected to MongoDB")).catch((err) => console.log(err))
 
+const connectedUsers = {};
 
 io.use((socket, next) => {
     const authtoken = socket.handshake.auth.token
@@ -34,14 +36,38 @@ io.use((socket, next) => {
         socket.user = user
         next();
     })
-}).on("connection", (socket) => {
-    console.log(socket.id, socket.user);
-    socket.on("disconnect", (reason) => {
-        console.log(reason);
-    });
-    socket.on('peer',(pc)=>{
-        console.log(pc)
-    })
+}).on('connection', (socket) => {
+  socket.on('join-room', async (roomId) => {
+    // console.log('User connected:', socket.id);
+    connectedUsers[socket.id] = roomId;
+    socket.join(roomId);
+    setTimeout(() => {
+      socket.emit('response', socket.id);
+    }, 1000);
+    socket.to(roomId).emit('New-User', socket.id);
+  });
+
+  socket.on('offer', ({ offer, fromUserId, toUserId }) => {
+    setTimeout(() => {
+      socket.to(toUserId).emit('Listen-Offer', { offer, fromUserId });
+    }, 1000);
+  });
+
+  socket.on('ice-candidate', ({ candidate, fromUserId, toUserId }) => {
+    socket.to(toUserId).emit('Listen-ICE', { candidate, fromUserId });
+  });
+
+  socket.on('answer', ({ answer, fromUserId, toUserId }) => {
+    setTimeout(() => {
+      socket.to(toUserId).emit('Listen-Answer', { answer, fromUserId });
+    }, 1000);
+  });
+
+  socket.on('disconnect', async () => {
+    // console.log('User disconnected:', socket.id);
+    socket.to(connectedUsers[socket.id]).emit('user-disconnected', socket.id);
+    delete connectedUsers[socket.id];
+  });
 });
 
 //authentication api end-point
@@ -51,4 +77,4 @@ app.use('/notes', Note)
 
 app.use('/room', Room)
 
-httpServer.listen(process.env.PORT || 3001, () => console.log("server started"))
+httpServer.listen(process.env.PORT || 3001, '0.0.0.0', () => console.log("server started"))

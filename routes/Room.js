@@ -16,7 +16,7 @@ router.post('/verify', authenticate, async (req, res) => {
     let ids = await client.LRANGE('roomId', 0, -1);
     if (req.body.roomId !== "" && ids.includes(req.body.roomId))
         return res.sendStatus(201);
-    return res.status(401);
+    return res.sendStatus(401);
 })
 
 module.exports = router

@@ -26,16 +26,16 @@ mongoose.connect(url, { useNewUrlParser: true }).then(() => console.log("Connect
 const connectedUsers = {};
 
 io.use((socket, next) => {
-    const authtoken = socket.handshake.auth.token
-    const token = authtoken && authtoken.split(' ')[1]
-    if (token == null)
-        return res.sendStatus(401)
-    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
-        if (err)
-            return;
-        socket.user = user
-        next();
-    })
+  const authtoken = socket.handshake.auth.token
+  const token = authtoken && authtoken.split(' ')[1]
+  if (token == null)
+    return res.sendStatus(401)
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+    if (err)
+      return;
+    socket.user = user
+    next();
+  })
 }).on('connection', (socket) => {
   socket.on('join-room', async (roomId) => {
     // console.log('User connected:', socket.id);
@@ -43,14 +43,14 @@ io.use((socket, next) => {
     socket.join(roomId);
     setTimeout(() => {
       socket.emit('response', socket.id);
-    }, 1000);
+    }, 500);
     socket.to(roomId).emit('New-User', socket.id);
   });
 
   socket.on('offer', ({ offer, fromUserId, toUserId }) => {
     setTimeout(() => {
       socket.to(toUserId).emit('Listen-Offer', { offer, fromUserId });
-    }, 1000);
+    }, 500);
   });
 
   socket.on('ice-candidate', ({ candidate, fromUserId, toUserId }) => {
@@ -60,8 +60,16 @@ io.use((socket, next) => {
   socket.on('answer', ({ answer, fromUserId, toUserId }) => {
     setTimeout(() => {
       socket.to(toUserId).emit('Listen-Answer', { answer, fromUserId });
-    }, 1000);
+    }, 500);
   });
+
+  socket.on('Re-Connection', (fromUserId) => {
+    let roomId = connectedUsers[socket.id];
+    socket.to(roomId).emit('user-disconnected', fromUserId);
+    setTimeout(() => {
+      socket.to(roomId).emit('New-User', fromUserId);
+    }, 500);
+  })
 
   socket.on('disconnect', async () => {
     // console.log('User disconnected:', socket.id);

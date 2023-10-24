@@ -24,6 +24,7 @@ mongoose.set('strictQuery', true);
 mongoose.connect(url, { useNewUrlParser: true }).then(() => console.log("Connected to MongoDB")).catch((err) => console.log(err))
 
 const connectedUsers = {};
+const ListUsers = {};
 
 io.use((socket, next) => {
   const authtoken = socket.handshake.auth.token
@@ -37,13 +38,18 @@ io.use((socket, next) => {
     next();
   })
 }).on('connection', (socket) => {
+  /* For WEB-RTC */
   socket.on('join-room', async (roomId) => {
     // console.log('User connected:', socket.id);
     connectedUsers[socket.id] = roomId;
+    if (ListUsers[roomId] === undefined) {
+      ListUsers[roomId] = new Set();
+    }
+    ListUsers[roomId].add(socket.id);
     socket.join(roomId);
     setTimeout(() => {
       socket.emit('response', socket.id);
-    }, 500);
+    }, 100);
     socket.to(roomId).emit('New-User', socket.id);
   });
 
@@ -64,16 +70,29 @@ io.use((socket, next) => {
   });
 
   socket.on('Re-Connection', (fromUserId) => {
-    let roomId = connectedUsers[socket.id];
+    let roomId = connectedUsers[fromUserId];
     socket.to(roomId).emit('user-disconnected', fromUserId);
     setTimeout(() => {
-      socket.to(roomId).emit('New-User', fromUserId);
+      socket.emit('Create-Offers', [...ListUsers[roomId]]);
     }, 500);
-  })
+  });
+
+  socket.on('Screen-Id', ({ fromUserId, sId }) => {
+    socket.to(connectedUsers[fromUserId]).emit('ScreenID', sId);
+  });
+
+  socket.on('Stop-Screen-Share', ({ fromUserId }) => {
+    socket.to(connectedUsers[fromUserId]).emit('Screen-Share-Ended');
+  });
 
   socket.on('disconnect', async () => {
     // console.log('User disconnected:', socket.id);
     socket.to(connectedUsers[socket.id]).emit('user-disconnected', socket.id);
+    if (ListUsers[connectedUsers[socket.id]] !== undefined) {
+      ListUsers[connectedUsers[socket.id]].delete(socket.id);
+      if (ListUsers[connectedUsers[socket.id]].size == 0)
+        delete ListUsers[connectedUsers[socket.id]];
+    }
     delete connectedUsers[socket.id];
   });
 });
